@@ -1,0 +1,82 @@
+name: coderoom-backend
+
+services:
+  identity-postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: coderoom_identity
+      POSTGRES_USER: identity_service
+      POSTGRES_PASSWORD: identity_service
+    ports:
+      - "5432:5432"
+    volumes:
+      - identity_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U identity_service -d coderoom_identity"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  kafka:
+    image: apache/kafka:4.1.1
+    environment:
+      CLUSTER_ID: "q1Sh-9_ISia_zwGINzRvyQ"
+      AUTO_FORMAT_KAFKA_STORAGE_DIR: "true"
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENERS: INTERNAL://:9092,EXTERNAL://:9094,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092,EXTERNAL://localhost:9094
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+    ports:
+      - "9094:9094"
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+
+  minio:
+    image: minio/minio:RELEASE.2024-12-18T13-15-44Z
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minio
+      MINIO_ROOT_PASSWORD: minio12345
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+
+  identity-service:
+    build:
+      context: .
+      dockerfile: services/identity-service/Dockerfile
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://identity-postgres:5432/coderoom_identity
+      SPRING_DATASOURCE_USERNAME: identity_service
+      SPRING_DATASOURCE_PASSWORD: identity_service
+      CODEROOM_JWT_SECRET: "dev-only-secret-change-me-32bytes-minimum!!"
+      CODEROOM_BOOTSTRAP_ROOT_EMAIL: ${CODEROOM_BOOTSTRAP_ROOT_EMAIL:-root@coderoom.local}
+      CODEROOM_BOOTSTRAP_ROOT_PASSWORD: ${CODEROOM_BOOTSTRAP_ROOT_PASSWORD:-ChangeMe12345!}
+    ports:
+      - "8081:8080"
+    depends_on:
+      identity-postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+
+volumes:
+  identity_postgres_data:
+  kafka_data:
+  minio_data:
