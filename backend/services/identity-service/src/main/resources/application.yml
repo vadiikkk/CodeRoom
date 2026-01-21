@@ -1,0 +1,32 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: identity-service
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/coderoom_identity}
+    username: ${SPRING_DATASOURCE_USERNAME:identity_service}
+    password: ${SPRING_DATASOURCE_PASSWORD:identity_service}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  liquibase:
+    change-log: classpath:db/changelog/db.changelog-master.yaml
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+coderoom:
+  bootstrap:
+    root:
+      email: ${CODEROOM_BOOTSTRAP_ROOT_EMAIL:}
+      password: ${CODEROOM_BOOTSTRAP_ROOT_PASSWORD:}
+  jwt:
+    secret: ${CODEROOM_JWT_SECRET:dev-only-secret-change-me-32bytes-minimum!!}
+    access-token-ttl-seconds: ${CODEROOM_JWT_ACCESS_TTL_SECONDS:3600}
+    refresh-token-ttl-seconds: ${CODEROOM_JWT_REFRESH_TTL_SECONDS:2592000}

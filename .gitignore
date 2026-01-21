@@ -1,1 +1,21 @@
 docs/
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+bin/
+
+# Gradle
+.gradle/
+**/build/
+
+# Local env
+.env
+
+# Logs
+*.log
+
+# Docker
+*.pid
