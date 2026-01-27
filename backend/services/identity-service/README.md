@@ -20,49 +20,49 @@ Env-переменные (обычно задаются в `backend/docker-compo
 
 ## TL;DR
 
-- **Base URL (dev)**: `http://localhost:8081`
-- **Swagger UI**: `http://localhost:8081/swagger-ui/index.html`
-- **OpenAPI JSON**: `http://localhost:8081/v3/api-docs`
+- **Base URL (dev)**: `http://localhost:8080` (через `api-gateway`)
+- **Swagger UI**: `http://localhost:8080/swagger-ui/index.html`
+- **OpenAPI JSON**: `http://localhost:8080/v3/api-docs`
 
 ## API
 
 ### Auth
 
-- `POST /auth/register`
+- `POST /api/v1/auth/register`
   - body: `{ "email": "student@example.com", "password": "secret1234" }`
   - response: `{ "accessToken": "...", "refreshToken": "...", "tokenType": "Bearer" }`
-- `POST /auth/login`
+- `POST /api/v1/auth/login`
   - body: `{ "email": "student@example.com", "password": "secret1234" }`
   - response: `{ "accessToken": "...", "refreshToken": "...", "tokenType": "Bearer" }`
-- `POST /auth/refresh`
+- `POST /api/v1/auth/refresh`
   - body: `{ "refreshToken": "..." }`
   - response: `{ "accessToken": "...", "refreshToken": "...", "tokenType": "Bearer" }`
-- `POST /auth/logout`
+- `POST /api/v1/auth/logout`
   - body: `{ "refreshToken": "..." }`
   - revokes этот refresh token (idempotent)
-- `POST /auth/logout-all`
+- `POST /api/v1/auth/logout-all`
   - body: `{ "refreshToken": "..." }`
   - revokes все refresh токены пользователя, которому принадлежит переданный refresh token
 
 ### Me
 
-- `GET /me`
+- `GET /api/v1/me`
   - response: `{ "userId": "...", "email": "...", "role": "STUDENT" }`
-- `POST /me/password`
+- `POST /api/v1/me/password`
   - headers: `Authorization: Bearer <accessToken>`
   - body: `{ "oldPassword": "...", "newPassword": "..." }`
   - меняет пароль и ревокает все refresh токены пользователя
 
 ### Admin (только root)
 
-- `GET /admin/users?q=...&page=0&size=50`
+- `GET /api/v1/admin/users?q=...&page=0&size=50`
   - headers: `Authorization: Bearer <accessToken-root>`
   - список пользователей (поиск по email через `q`, пагинация)
-- `PUT /admin/users/role`
+- `PUT /api/v1/admin/users/role`
   - headers: `Authorization: Bearer <accessToken-root>`
   - body: `{ "email": "user@example.com", "role": "TEACHER" }`
   - Назначает роль пользователю по email (email нормализуется в lower-case).
-- `PUT /admin/users/active`
+- `PUT /api/v1/admin/users/active`
   - headers: `Authorization: Bearer <accessToken-root>`
   - body: `{ "email": "user@example.com", "isActive": false }`
   - деактивация/активация пользователя; при деактивации ревокает все refresh токены пользователя
