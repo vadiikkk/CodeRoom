@@ -8,13 +8,13 @@ Backend реализуется как монорепо с несколькими
 
 Из папки `backend/`:
 
-- поднять инфраструктуру + `identity-service`:
+- поднять инфраструктуру + `identity-service` + `api-gateway`:
   - `docker compose up --build`
 
 После запуска:
-- `identity-service`: `http://localhost:8081`
-- Swagger UI: `http://localhost:8081/swagger-ui/index.html`
-- OpenAPI json: `http://localhost:8081/v3/api-docs`
+- `api-gateway` (единая точка входа): `http://localhost:8080`
+- Swagger UI (identity-service через gateway): `http://localhost:8080/swagger-ui/index.html`
+- OpenAPI json (identity-service через gateway): `http://localhost:8080/v3/api-docs`
 - Postgres (identity): `localhost:5432` (db: `coderoom_identity`, user/pass: `identity_service`)
 - Kafka (dev, external listener): `localhost:9094`
 

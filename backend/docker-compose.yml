@@ -1,6 +1,18 @@
 name: coderoom-backend
 
 services:
+  api-gateway:
+    build:
+      context: ./api-gateway
+      dockerfile: Dockerfile
+    environment:
+      CODEROOM_JWT_SECRET: "dev-only-secret-change-me-32bytes-minimum!!"
+    ports:
+      - "8080:8080"
+    depends_on:
+      identity-service:
+        condition: service_started
+
   identity-postgres:
     image: postgres:16
     environment:
@@ -68,8 +80,8 @@ services:
       CODEROOM_JWT_SECRET: "dev-only-secret-change-me-32bytes-minimum!!"
       CODEROOM_BOOTSTRAP_ROOT_EMAIL: ${CODEROOM_BOOTSTRAP_ROOT_EMAIL:-root@coderoom.local}
       CODEROOM_BOOTSTRAP_ROOT_PASSWORD: ${CODEROOM_BOOTSTRAP_ROOT_PASSWORD:-ChangeMe12345!}
-    ports:
-      - "8081:8080"
+    expose:
+      - "8080"
     depends_on:
       identity-postgres:
         condition: service_healthy
