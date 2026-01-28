@@ -1,0 +1,28 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: course-service
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/coderoom_course}
+    username: ${SPRING_DATASOURCE_USERNAME:course_service}
+    password: ${SPRING_DATASOURCE_PASSWORD:course_service}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  liquibase:
+    change-log: classpath:db/changelog/db.changelog-master.yaml
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+coderoom:
+  jwt:
+    secret: ${CODEROOM_JWT_SECRET:dev-only-secret-change-me-32bytes-minimum!!}
+  course:
+    github-pat-key: ${CODEROOM_COURSE_GITHUB_PAT_KEY:dev-only-course-pat-key-change-me}

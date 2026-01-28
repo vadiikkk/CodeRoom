@@ -1,0 +1,7 @@
+databaseChangeLog:
+  - include:
+      file: db/changelog/changes/01_create_courses.sql
+  - include:
+      file: db/changelog/changes/02_create_course_structure.sql
+  - include:
+      file: db/changelog/changes/03_create_course_github_pat.sql
