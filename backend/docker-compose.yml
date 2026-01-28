@@ -12,6 +12,8 @@ services:
     depends_on:
       identity-service:
         condition: service_started
+      course-service:
+        condition: service_started
 
   identity-postgres:
     image: postgres:16
@@ -25,6 +27,22 @@ services:
       - identity_postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U identity_service -d coderoom_identity"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  course-postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: coderoom_course
+      POSTGRES_USER: course_service
+      POSTGRES_PASSWORD: course_service
+    ports:
+      - "5433:5432"
+    volumes:
+      - course_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U course_service -d coderoom_course"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -50,11 +68,6 @@ services:
       - "9094:9094"
     volumes:
       - kafka_data:/var/lib/kafka/data
-
-  redis:
-    image: redis:7
-    ports:
-      - "6379:6379"
 
   minio:
     image: minio/minio:RELEASE.2024-12-18T13-15-44Z
@@ -88,7 +101,25 @@ services:
       kafka:
         condition: service_started
 
+  course-service:
+    build:
+      context: .
+      dockerfile: services/course-service/Dockerfile
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://course-postgres:5432/coderoom_course
+      SPRING_DATASOURCE_USERNAME: course_service
+      SPRING_DATASOURCE_PASSWORD: course_service
+      CODEROOM_JWT_SECRET: "dev-only-secret-change-me-32bytes-minimum!!"
+      CODEROOM_COURSE_GITHUB_PAT_KEY: "dev-only-course-pat-key-change-me"
+    expose:
+      - "8080"
+    depends_on:
+      course-postgres:
+        condition: service_healthy
+
 volumes:
   identity_postgres_data:
+  course_postgres_data:
   kafka_data:
   minio_data:

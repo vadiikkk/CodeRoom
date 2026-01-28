@@ -18,12 +18,6 @@ Env-переменные (обычно задаются в `backend/docker-compo
 - `CODEROOM_BOOTSTRAP_ROOT_EMAIL`
 - `CODEROOM_BOOTSTRAP_ROOT_PASSWORD`
 
-## TL;DR
-
-- **Base URL (dev)**: `http://localhost:8080` (через `api-gateway`)
-- **Swagger UI**: `http://localhost:8080/swagger-ui/index.html`
-- **OpenAPI JSON**: `http://localhost:8080/v3/api-docs`
-
 ## API
 
 ### Auth
@@ -82,11 +76,3 @@ Env-переменные (обычно задаются в `backend/docker-compo
 - `SPRING_DATASOURCE_URL`
 - `SPRING_DATASOURCE_USERNAME`
 - `SPRING_DATASOURCE_PASSWORD`
-
-## Локальная разработка
-
-Сервис собирается из корня `backend/`:
-
-```bash
-./gradlew :services:identity-service:build
-```
