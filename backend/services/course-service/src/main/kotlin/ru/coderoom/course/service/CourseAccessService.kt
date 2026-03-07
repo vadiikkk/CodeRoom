@@ -32,4 +32,12 @@ class CourseAccessService(
             throw ResponseStatusException(HttpStatus.FORBIDDEN, "Teacher role required in course")
         }
     }
+
+    fun requireStaff(courseId: UUID, userId: UUID): RoleInCourse {
+        val role = requireMember(courseId, userId)
+        if (role != RoleInCourse.TEACHER && role != RoleInCourse.ASSISTANT) {
+            throw ResponseStatusException(HttpStatus.FORBIDDEN, "Teacher or assistant role required in course")
+        }
+        return role
+    }
 }

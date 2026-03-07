@@ -10,6 +10,7 @@ import java.util.UUID
 
 interface UserRepository : JpaRepository<UserEntity, UUID> {
     fun findByEmail(email: String): UserEntity?
+    fun findAllByUserIdIn(userIds: Collection<UUID>): List<UserEntity>
     fun existsByEmail(email: String): Boolean
     fun findByIsRootTrue(): UserEntity?
     fun findByEmailContainingIgnoreCase(email: String, pageable: Pageable): Page<UserEntity>

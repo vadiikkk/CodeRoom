@@ -47,6 +47,22 @@ services:
       timeout: 5s
       retries: 10
 
+  autograding-postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: coderoom_autograding
+      POSTGRES_USER: autograding_service
+      POSTGRES_PASSWORD: autograding_service
+    ports:
+      - "5434:5432"
+    volumes:
+      - autograding_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U autograding_service -d coderoom_autograding"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   kafka:
     image: apache/kafka:4.1.1
     environment:
@@ -110,16 +126,77 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://course-postgres:5432/coderoom_course
       SPRING_DATASOURCE_USERNAME: course_service
       SPRING_DATASOURCE_PASSWORD: course_service
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
       CODEROOM_JWT_SECRET: "dev-only-secret-change-me-32bytes-minimum!!"
       CODEROOM_COURSE_GITHUB_PAT_KEY: "dev-only-course-pat-key-change-me"
+      CODEROOM_IDENTITY_BASE_URL: "http://identity-service:8080"
+      CODEROOM_CONTENT_BASE_URL: "http://content-service:8080"
+      CODEROOM_CONTENT_BUCKET: "coderoom"
     expose:
       - "8080"
     depends_on:
       course-postgres:
         condition: service_healthy
+      content-service:
+        condition: service_started
+      kafka:
+        condition: service_started
+
+  content-service:
+    build:
+      context: .
+      dockerfile: services/content-service/Dockerfile
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      CODEROOM_STORAGE_INTERNAL_ENDPOINT: "http://minio:9000"
+      CODEROOM_STORAGE_PUBLIC_ENDPOINT: "http://localhost:9000"
+      CODEROOM_STORAGE_ACCESS_KEY: "minio"
+      CODEROOM_STORAGE_SECRET_KEY: "minio12345"
+      CODEROOM_STORAGE_BUCKET: "coderoom"
+      CODEROOM_STORAGE_REGION: "us-east-1"
+    expose:
+      - "8080"
+    depends_on:
+      minio:
+        condition: service_started
+
+  autograding-service:
+    build:
+      context: .
+      dockerfile: services/autograding-service/Dockerfile
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://autograding-postgres:5432/coderoom_autograding
+      SPRING_DATASOURCE_USERNAME: autograding_service
+      SPRING_DATASOURCE_PASSWORD: autograding_service
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
+    expose:
+      - "8080"
+    depends_on:
+      autograding-postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+
+  runner-service:
+    build:
+      context: .
+      dockerfile: services/runner-service/Dockerfile
+    environment:
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
+      CODEROOM_CONTENT_BASE_URL: "http://content-service:8080"
+      CODEROOM_RUNNER_WORKSPACE_ROOT: "/tmp/coderoom-runs"
+      CODEROOM_RUNNER_TIMEOUT_SECONDS: "180"
+    expose:
+      - "8080"
+    depends_on:
+      kafka:
+        condition: service_started
+      content-service:
+        condition: service_started
 
 volumes:
   identity_postgres_data:
   course_postgres_data:
+  autograding_postgres_data:
   kafka_data:
   minio_data:

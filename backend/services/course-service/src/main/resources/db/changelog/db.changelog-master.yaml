@@ -5,3 +5,11 @@ databaseChangeLog:
       file: db/changelog/changes/02_create_course_structure.sql
   - include:
       file: db/changelog/changes/03_create_course_github_pat.sql
+  - include:
+      file: db/changelog/changes/04_create_course_content.sql
+  - include:
+      file: db/changelog/changes/05_create_groups_submissions.sql
+  - include:
+      file: db/changelog/changes/06_create_code_assignments.sql
+  - include:
+      file: db/changelog/changes/07_add_code_attempt_diagnostics.sql

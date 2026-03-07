@@ -1,0 +1,40 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: autograding-service
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5434/coderoom_autograding}
+    username: ${SPRING_DATASOURCE_USERNAME:autograding_service}
+    password: ${SPRING_DATASOURCE_PASSWORD:autograding_service}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  liquibase:
+    change-log: classpath:db/changelog/db.changelog-master.yaml
+  kafka:
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9094}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+    consumer:
+      group-id: autograding-service
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+coderoom:
+  kafka:
+    topics:
+      autograde-jobs: ${CODEROOM_KAFKA_TOPIC_AUTOGRADE_JOBS:coderoom.autograde.jobs}
+      runner-jobs: ${CODEROOM_KAFKA_TOPIC_RUNNER_JOBS:coderoom.runner.jobs}
+      runner-results: ${CODEROOM_KAFKA_TOPIC_RUNNER_RESULTS:coderoom.runner.results}
+      autograde-results: ${CODEROOM_KAFKA_TOPIC_AUTOGRADE_RESULTS:coderoom.autograde.results}
