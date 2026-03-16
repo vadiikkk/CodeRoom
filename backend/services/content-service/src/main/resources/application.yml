@@ -1,0 +1,23 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: content-service
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+coderoom:
+  storage:
+    internal-endpoint: ${CODEROOM_STORAGE_INTERNAL_ENDPOINT:http://localhost:9000}
+    public-endpoint: ${CODEROOM_STORAGE_PUBLIC_ENDPOINT:${CODEROOM_STORAGE_INTERNAL_ENDPOINT:http://localhost:9000}}
+    access-key: ${CODEROOM_STORAGE_ACCESS_KEY:minio}
+    secret-key: ${CODEROOM_STORAGE_SECRET_KEY:minio12345}
+    bucket: ${CODEROOM_STORAGE_BUCKET:coderoom}
+    region: ${CODEROOM_STORAGE_REGION:us-east-1}
+    upload-expiry-minutes: ${CODEROOM_STORAGE_UPLOAD_EXPIRY_MINUTES:30}
+    download-expiry-minutes: ${CODEROOM_STORAGE_DOWNLOAD_EXPIRY_MINUTES:30}

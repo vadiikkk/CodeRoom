@@ -13,6 +13,18 @@ data class UpsertEnrollmentRequest(
     val roleInCourse: RoleInCourse,
 )
 
+data class UpsertEnrollmentsByEmailRequest(
+    @field:NotNull(message = "emails is required")
+    val emails: List<String>,
+
+    @field:NotNull(message = "roleInCourse is required")
+    val roleInCourse: RoleInCourse,
+)
+
+data class UpsertEnrollmentsByEmailResponse(
+    val addedOrUpdated: Int,
+)
+
 data class EnrollmentResponse(
     val userId: UUID,
     val roleInCourse: RoleInCourse,

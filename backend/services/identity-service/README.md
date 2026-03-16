@@ -13,7 +13,7 @@
 
 Если root ещё не создан, сервис требует указать креды root (иначе старт завершится ошибкой).
 
-Env-переменные (обычно задаются в `backend/docker-compose.yml`/`.env`):
+Env-переменные:
 
 - `CODEROOM_BOOTSTRAP_ROOT_EMAIL`
 - `CODEROOM_BOOTSTRAP_ROOT_PASSWORD`
@@ -60,6 +60,19 @@ Env-переменные (обычно задаются в `backend/docker-compo
   - headers: `Authorization: Bearer <accessToken-root>`
   - body: `{ "email": "user@example.com", "isActive": false }`
   - деактивация/активация пользователя; при деактивации ревокает все refresh токены пользователя
+
+### Users lookup (для backend-сервисов)
+
+Используется другими сервисами, чтобы:
+- резолвить `userId` по email;
+- резолвить email по `userId` для gradebook/export сценариев.
+
+- `POST /api/v1/users/lookup` (требует глобальную роль `TEACHER`)
+  - body: `{ "emails": ["s1@example.com","s2@example.com"] }`
+  - response: `{ "users": [{ "userId": "...", "email": "s1@example.com" }] }`
+- `POST /api/v1/users/lookup-by-ids` (требует глобальную роль `TEACHER|ASSISTANT`)
+  - body: `{ "userIds": ["...","..."] }`
+  - response: `{ "users": [{ "userId": "...", "email": "s1@example.com" }] }`
 
 ## Конфигурация
 

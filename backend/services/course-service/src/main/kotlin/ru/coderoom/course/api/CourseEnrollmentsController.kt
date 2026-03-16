@@ -9,7 +9,10 @@ import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
+import org.springframework.web.bind.annotation.RequestHeader
 import ru.coderoom.course.api.dto.EnrollmentResponse
+import ru.coderoom.course.api.dto.UpsertEnrollmentsByEmailRequest
+import ru.coderoom.course.api.dto.UpsertEnrollmentsByEmailResponse
 import ru.coderoom.course.api.dto.UpsertEnrollmentRequest
 import ru.coderoom.course.security.RequestUser
 import ru.coderoom.course.service.CourseAppService
@@ -45,6 +48,23 @@ class CourseEnrollmentsController(
             targetUserId = req.userId,
             roleInCourse = req.roleInCourse,
         )
+    }
+
+    @PostMapping("/by-email")
+    fun upsertByEmail(
+        @AuthenticationPrincipal user: RequestUser,
+        @PathVariable courseId: UUID,
+        @RequestHeader("Authorization") authorization: String,
+        @Valid @RequestBody req: UpsertEnrollmentsByEmailRequest,
+    ): UpsertEnrollmentsByEmailResponse {
+        val r = app.upsertEnrollmentsByEmail(
+            courseId = courseId,
+            requesterUserId = user.userId,
+            requesterAuthHeader = authorization,
+            emails = req.emails,
+            roleInCourse = req.roleInCourse,
+        )
+        return UpsertEnrollmentsByEmailResponse(addedOrUpdated = r.addedOrUpdated)
     }
 
     @DeleteMapping("/{userId}")

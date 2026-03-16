@@ -1,0 +1,33 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: runner-service
+  kafka:
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9094}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+    consumer:
+      group-id: runner-service
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+coderoom:
+  kafka:
+    topics:
+      runner-jobs: ${CODEROOM_KAFKA_TOPIC_RUNNER_JOBS:coderoom.runner.jobs}
+      runner-results: ${CODEROOM_KAFKA_TOPIC_RUNNER_RESULTS:coderoom.runner.results}
+  content:
+    base-url: ${CODEROOM_CONTENT_BASE_URL:http://content-service:8080}
+  runner:
+    workspace-root: ${CODEROOM_RUNNER_WORKSPACE_ROOT:/tmp/coderoom-runs}
+    command-timeout-seconds: ${CODEROOM_RUNNER_TIMEOUT_SECONDS:180}

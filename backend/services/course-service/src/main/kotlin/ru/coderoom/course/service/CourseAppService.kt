@@ -13,6 +13,7 @@ import ru.coderoom.course.domain.CourseGithubPatEntity
 import ru.coderoom.course.domain.CourseItemEntity
 import ru.coderoom.course.domain.CourseItemType
 import ru.coderoom.course.domain.RoleInCourse
+import ru.coderoom.course.identity.IdentityClient
 import ru.coderoom.course.repo.CourseBlockRepository
 import ru.coderoom.course.repo.CourseEnrollmentRepository
 import ru.coderoom.course.repo.CourseGithubPatRepository
@@ -30,6 +31,7 @@ class CourseAppService(
     private val items: CourseItemRepository,
     private val githubPats: CourseGithubPatRepository,
     private val patCrypto: GithubPatCrypto,
+    private val identity: IdentityClient,
 ) {
     @Transactional
     fun createCourse(ownerUserId: UUID, title: String, description: String?, isVisible: Boolean): CourseEntity {
@@ -57,15 +59,31 @@ class CourseAppService(
 
     @Transactional(readOnly = true)
     fun listMyCourses(userId: UUID): List<CourseEntity> {
-        val my = enrollments.findAllByUserId(userId).map { it.courseId }.distinct()
-        if (my.isEmpty()) return emptyList()
-        return courses.findAllById(my).sortedBy { it.createdAt }
+        val myEnrollments = enrollments.findAllByUserId(userId)
+        val courseIds = myEnrollments.map { it.courseId }.distinct()
+        if (courseIds.isEmpty()) return emptyList()
+
+        val roleByCourseId = myEnrollments.associate { it.courseId to it.roleInCourse }
+        val all = courses.findAllById(courseIds)
+
+        return all
+            .asSequence()
+            .filter { course ->
+                val role = roleByCourseId[course.courseId] ?: return@filter false
+                role != RoleInCourse.STUDENT || course.isVisible
+            }
+            .sortedBy { it.createdAt }
+            .toList()
     }
 
     @Transactional(readOnly = true)
     fun getCourseForMember(courseId: UUID, userId: UUID): CourseEntity {
-        access.requireMember(courseId, userId)
-        return access.requireCourse(courseId)
+        val role = access.requireMember(courseId, userId)
+        val course = access.requireCourse(courseId)
+        if (role == RoleInCourse.STUDENT && !course.isVisible) {
+            throw ResponseStatusException(HttpStatus.NOT_FOUND, "Course not found")
+        }
+        return course
     }
 
     @Transactional
@@ -236,10 +254,28 @@ class CourseAppService(
 
     @Transactional(readOnly = true)
     fun getStructure(courseId: UUID, userId: UUID): CourseStructure {
-        access.requireMember(courseId, userId)
+        val role = access.requireMember(courseId, userId)
+        val course = access.requireCourse(courseId)
+        if (role == RoleInCourse.STUDENT && !course.isVisible) {
+            throw ResponseStatusException(HttpStatus.NOT_FOUND, "Course not found")
+        }
+
         val courseBlocks = blocks.findAllByCourseIdOrderByPositionAsc(courseId)
         val courseItems = items.findAllByCourseIdOrderByPositionAsc(courseId)
-        return CourseStructure(blocks = courseBlocks, items = courseItems)
+
+        if (role != RoleInCourse.STUDENT) {
+            return CourseStructure(blocks = courseBlocks, items = courseItems)
+        }
+
+        val visibleBlocks = courseBlocks.filter { it.isVisible }
+        val visibleBlockIds = visibleBlocks.map { it.blockId }.toHashSet()
+        val visibleItems = courseItems.filter { item ->
+            if (!item.isVisible) return@filter false
+            val bid = item.blockId ?: return@filter true
+            visibleBlockIds.contains(bid)
+        }
+
+        return CourseStructure(blocks = visibleBlocks, items = visibleItems)
     }
 
     @Transactional
@@ -269,6 +305,64 @@ class CourseAppService(
     @Transactional(readOnly = true)
     fun githubPatConfigured(courseId: UUID): Boolean =
         githubPats.existsById(courseId)
+
+    @Transactional
+    fun resolveGithubPatForTeacher(courseId: UUID, userId: UUID, overrideToken: String?): String {
+        access.requireTeacher(courseId, userId)
+        access.requireCourse(courseId)
+        val normalized = overrideToken?.trim()?.ifBlank { null }
+        if (normalized != null) {
+            val encrypted = patCrypto.encrypt(normalized)
+            upsertGithubPat(courseId, encrypted)
+            return normalized
+        }
+        val entity = githubPats.findById(courseId).orElseThrow {
+            ResponseStatusException(HttpStatus.BAD_REQUEST, "GitHub PAT is not configured for course")
+        }
+        return patCrypto.decrypt(EncryptedBytes(iv = entity.iv, ciphertext = entity.ciphertext))
+    }
+
+    @Transactional(readOnly = true)
+    fun requireGithubPat(courseId: UUID, userId: UUID): String {
+        access.requireTeacher(courseId, userId)
+        val entity = githubPats.findById(courseId).orElseThrow {
+            ResponseStatusException(HttpStatus.BAD_REQUEST, "GitHub PAT is not configured for course")
+        }
+        return patCrypto.decrypt(EncryptedBytes(iv = entity.iv, ciphertext = entity.ciphertext))
+    }
+
+    @Transactional
+    fun upsertEnrollmentsByEmail(
+        courseId: UUID,
+        requesterUserId: UUID,
+        requesterAuthHeader: String,
+        emails: List<String>,
+        roleInCourse: RoleInCourse,
+    ): EnrollmentByEmailResult {
+        access.requireTeacher(courseId, requesterUserId)
+        access.requireCourse(courseId)
+
+        if (roleInCourse == RoleInCourse.TEACHER) {
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot assign TEACHER via this endpoint")
+        }
+
+        val normalized = emails.map { it.trim().lowercase() }.filter { it.isNotBlank() }.distinct()
+        if (normalized.isEmpty()) {
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "emails must not be empty")
+        }
+
+        val resolved = identity.lookupUsersByEmail(requesterAuthHeader, normalized)
+        val resolvedByEmail = resolved.associateBy { it.email.trim().lowercase() }
+        val missing = normalized.filter { !resolvedByEmail.containsKey(it) }
+        if (missing.isNotEmpty()) {
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Users not found: ${missing.joinToString(",")}")
+        }
+
+        resolved.forEach { u ->
+            upsertEnrollment(courseId, requesterUserId, u.userId, roleInCourse)
+        }
+        return EnrollmentByEmailResult(addedOrUpdated = resolved.size)
+    }
 
     private fun upsertGithubPat(courseId: UUID, encrypted: EncryptedBytes) {
         val now = Instant.now()
@@ -300,4 +394,8 @@ data class CourseStructure(
 data class GithubPatStatus(
     val configured: Boolean,
     val updatedAt: Instant?,
+)
+
+data class EnrollmentByEmailResult(
+    val addedOrUpdated: Int,
 )

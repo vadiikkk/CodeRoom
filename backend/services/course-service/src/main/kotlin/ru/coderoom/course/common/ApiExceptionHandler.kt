@@ -22,7 +22,7 @@ class ApiExceptionHandler {
 
     @ExceptionHandler(HttpMessageNotReadableException::class)
     fun handleUnreadableBody(ex: HttpMessageNotReadableException): ResponseEntity<ApiError> =
-        ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiError(message = "Invalid JSON body"))
+        ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiError(message =  ex.message ?: "Invalid JSON body"))
 
     @ExceptionHandler(MethodArgumentNotValidException::class)
     fun handleValidation(ex: MethodArgumentNotValidException): ResponseEntity<ApiError> {
@@ -36,9 +36,9 @@ class ApiExceptionHandler {
 
     @ExceptionHandler(AuthenticationException::class)
     fun handleAuth(ex: AuthenticationException): ResponseEntity<ApiError> =
-        ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiError(message = "Unauthorized"))
+        ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiError(message = ex.message ?: "Unauthorized"))
 
     @ExceptionHandler(AccessDeniedException::class)
     fun handleAccessDenied(ex: AccessDeniedException): ResponseEntity<ApiError> =
-        ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiError(message = "Forbidden"))
+        ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiError(message =  ex.message ?: "Forbidden"))
 }

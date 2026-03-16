@@ -14,6 +14,16 @@ spring:
     open-in-view: false
   liquibase:
     change-log: classpath:db/changelog/db.changelog-master.yaml
+  kafka:
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9094}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+    consumer:
+      group-id: course-service
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
 
 management:
   endpoints:
@@ -22,7 +32,19 @@ management:
         include: health,info
 
 coderoom:
+  github:
+    api-base-url: ${CODEROOM_GITHUB_API_BASE_URL:https://api.github.com}
+    clone-base-url: ${CODEROOM_GITHUB_CLONE_BASE_URL:https://github.com}
+  kafka:
+    topics:
+      autograde-jobs: ${CODEROOM_KAFKA_TOPIC_AUTOGRADE_JOBS:coderoom.autograde.jobs}
+      autograde-results: ${CODEROOM_KAFKA_TOPIC_AUTOGRADE_RESULTS:coderoom.autograde.results}
   jwt:
     secret: ${CODEROOM_JWT_SECRET:dev-only-secret-change-me-32bytes-minimum!!}
   course:
     github-pat-key: ${CODEROOM_COURSE_GITHUB_PAT_KEY:dev-only-course-pat-key-change-me}
+  identity:
+    base-url: ${CODEROOM_IDENTITY_BASE_URL:http://localhost:8080}
+  content:
+    base-url: ${CODEROOM_CONTENT_BASE_URL:http://localhost:8081}
+    bucket: ${CODEROOM_CONTENT_BUCKET:coderoom}
