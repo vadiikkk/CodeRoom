@@ -13,17 +13,6 @@ SPA-клиент для LMS-платформы CodeRoom.
 - `react-hook-form + zod`
 - `Tailwind CSS v4`
 
-## Уже реализовано
-
-- JWT login/register/logout flow
-- session bootstrap через `GET /api/v1/me`
-- защищенный app shell
-- список курсов
-- страница курса
-- чтение структуры курса
-- детальные страницы материалов и заданий
-- создание курса для пользователя с глобальной ролью `TEACHER`
-
 ## Запуск
 
 ```bash
