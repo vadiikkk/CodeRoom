@@ -203,7 +203,7 @@ class SubmissionService(
             }
 
             AssignmentType.CODE ->
-                throw ResponseStatusException(HttpStatus.BAD_REQUEST, "CODE submissions are not supported yet")
+                throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Use /code-attempts endpoint for CODE assignments")
         }
     }
 

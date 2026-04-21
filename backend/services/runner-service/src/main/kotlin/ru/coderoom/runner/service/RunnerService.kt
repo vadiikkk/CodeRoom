@@ -132,18 +132,22 @@ class RunnerService(
             .start()
         val outputHolder = StringBuilder()
         val readerThread = thread(start = true) {
-            process.inputStream.bufferedReader(StandardCharsets.UTF_8).useLines { lines ->
-                lines.forEach {
-                    outputHolder.appendLine(it)
+            try {
+                process.inputStream.bufferedReader(StandardCharsets.UTF_8).useLines { lines ->
+                    lines.forEach {
+                        outputHolder.appendLine(it)
+                    }
                 }
+            } catch (_: java.io.IOException) {
             }
         }
         if (!process.waitFor(timeoutSeconds, TimeUnit.SECONDS)) {
             process.destroyForcibly()
-            readerThread.join(1_000)
-            error("Command timed out after ${timeoutSeconds}s")
+            readerThread.join(2_000)
+            outputHolder.appendLine("\n--- TIMED OUT after ${timeoutSeconds}s ---")
+            return ProcessResult(exitCode = 124, output = outputHolder.toString())
         }
-        readerThread.join(1_000)
+        readerThread.join(2_000)
         return ProcessResult(exitCode = process.exitValue(), output = outputHolder.toString())
     }
 
@@ -163,12 +167,13 @@ class RunnerService(
     }
 
     private fun unzip(bytes: ByteArray, targetDir: Path) {
-        Files.createDirectories(targetDir)
+        val normalizedTarget = targetDir.normalize()
+        Files.createDirectories(normalizedTarget)
         ZipInputStream(ByteArrayInputStream(bytes)).use { zip ->
             var entry = zip.nextEntry
             while (entry != null) {
-                val resolved = targetDir.resolve(entry.name).normalize()
-                if (!resolved.startsWith(targetDir)) {
+                val resolved = normalizedTarget.resolve(entry.name).normalize()
+                if (!resolved.startsWith(normalizedTarget)) {
                     error("Unsafe zip entry path")
                 }
                 if (entry.isDirectory) {

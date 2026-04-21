@@ -25,3 +25,34 @@ export interface MeResponse {
   email: string
   role: GlobalRole
 }
+
+export interface AdminUserResponse {
+  userId: string
+  email: string
+  role: GlobalRole
+  isRoot: boolean
+  isActive: boolean
+  createdAt: string
+}
+
+export interface SetUserRoleRequest {
+  email: string
+  role: GlobalRole
+}
+
+export interface SetUserActiveRequest {
+  email: string
+  isActive: boolean
+}
+
+export interface LookupUsersByEmailRequest {
+  emails: string[]
+}
+
+export interface LookupUsersByIdRequest {
+  userIds: string[]
+}
+
+export interface LookupUsersResponse {
+  users: Array<{ userId: string; email: string }>
+}

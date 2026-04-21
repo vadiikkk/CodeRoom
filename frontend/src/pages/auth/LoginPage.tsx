@@ -23,7 +23,7 @@ type LoginFormValues = z.infer<typeof loginSchema>
 export function LoginPage() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { setAuthenticated, setBootstrapping } = useAuthStore()
+  const { setAuthenticated } = useAuthStore()
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -38,9 +38,6 @@ export function LoginPage() {
       const tokens = await authApi.login(values)
       setStoredTokens(tokens)
       return authApi.me()
-    },
-    onMutate: () => {
-      setBootstrapping()
     },
     onSuccess: (user) => {
       setAuthenticated(user)
@@ -74,13 +71,12 @@ export function LoginPage() {
             Платформа для курсов по программированию
           </h1>
           <p className="mt-4 max-w-2xl text-base text-slate-300">
-            Управляйте курсами, публикуйте материалы и задания, отслеживайте
-            прогресс студентов в одном рабочем пространстве.
+            Единое пространство с курсами, материалами и заданиями для преподавателя и студента.
           </p>
           <div className="mt-8 grid gap-4 md:grid-cols-3">
             {[
-              'Курсы и учебные материалы',
-              'Задания и проверки',
+              'Публикация и хранение материалов',
+              'Задания и автопроверки',
               'Единое пространство преподавателя и студента',
             ].map((item) => (
               <div
@@ -96,7 +92,7 @@ export function LoginPage() {
         <section className="rounded-3xl border border-slate-800 bg-slate-950/80 p-8">
           <h2 className="text-2xl font-semibold text-white">Вход</h2>
           <p className="mt-2 text-sm text-slate-400">
-            Используйте учетную запись из `identity-service`.
+            Используйте вашу учетную запись или создайте новую.
           </p>
 
           <form
@@ -108,7 +104,7 @@ export function LoginPage() {
               <Input
                 type="text"
                 autoComplete="email"
-                placeholder="teacher2@coderoom.local"
+                placeholder="teacher@coderoom.local"
                 {...form.register('email')}
               />
               <FieldError message={form.formState.errors.email?.message} />

@@ -120,7 +120,7 @@ class CoderoomConfigMapper {
     private fun defaultCommand(language: CodeLanguage): String =
         when (language) {
             CodeLanguage.GO -> "go test -json ./..."
-            CodeLanguage.PYTHON -> "python -m pytest --junitxml=.coderoom/junit.xml"
+            CodeLanguage.PYTHON -> "python -m pytest --junitxml=junit.xml"
             CodeLanguage.JAVA -> "./gradlew test"
         }
 

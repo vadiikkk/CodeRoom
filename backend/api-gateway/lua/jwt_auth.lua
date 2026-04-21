@@ -135,4 +135,3 @@ if role ~= "" then
 end
 
 ngx.req.set_header("Authorization", auth)
-  
