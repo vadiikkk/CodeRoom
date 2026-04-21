@@ -158,7 +158,7 @@ export function CourseDetailsPage() {
         <div className="space-y-6">
           {structure.rootItems.length > 0 ? (
             <ContentSection
-              title="Корневые элементы"
+              title="Закрепленное"
               items={structure.rootItems}
               materialsById={materialsById}
               assignmentsById={assignmentsById}
@@ -202,6 +202,21 @@ export function CourseDetailsPage() {
                   Управление курсом
                 </Link>
               ) : null}
+              {membership.roleInCourse !== 'STUDENT' ? (
+                <Link
+                  to={`/app/courses/${courseId}/gradebook`}
+                  className="inline-flex w-full items-center justify-center rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm font-medium text-slate-100 transition hover:border-slate-600 hover:bg-slate-800"
+                >
+                  Ведомость
+                </Link>
+              ) : (
+                <Link
+                  to={`/app/courses/${courseId}/grades`}
+                  className="inline-flex w-full items-center justify-center rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm font-medium text-slate-100 transition hover:border-slate-600 hover:bg-slate-800"
+                >
+                  Мои оценки
+                </Link>
+              )}
             </div>
             <p className="mt-4 text-sm text-slate-400">
               Выберите раздел курса слева, чтобы открыть материал или перейти к
@@ -276,9 +291,6 @@ function ContentSection({
               <div className="flex flex-wrap items-center gap-3">
                 <span className="rounded-full border border-slate-700 px-3 py-1 text-xs font-medium text-slate-300">
                   {item.itemType}
-                </span>
-                <span className="rounded-full border border-slate-700 px-3 py-1 text-xs font-medium text-slate-300">
-                  Позиция {item.position}
                 </span>
                 {!item.isVisible ? (
                   <span className="rounded-full border border-amber-500/40 px-3 py-1 text-xs font-medium text-amber-200">

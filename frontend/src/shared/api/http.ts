@@ -132,13 +132,50 @@ export async function apiRequest<T>(
   const data = await parseResponse(response)
 
   if (!response.ok) {
-    const fallbackMessage =
-      typeof data === 'string'
-        ? data
-        : `Request failed with status ${response.status}`
+    let message: string | undefined
 
-    throw new ApiError(fallbackMessage, response.status, data)
+    if (typeof data === 'object' && data !== null && 'message' in data) {
+      const msg = (data as { message?: unknown }).message
+      if (typeof msg === 'string' && msg.trim()) message = msg
+    }
+
+    if (!message && typeof data === 'string' && data.trim()) {
+      message = data
+    }
+
+    if (!message) {
+      message = httpStatusMessage(response.status)
+    }
+
+    throw new ApiError(message, response.status, data)
   }
 
   return data as T
+}
+
+function httpStatusMessage(status: number): string {
+  switch (status) {
+    case 400:
+      return 'Некорректный запрос'
+    case 401:
+      return 'Неверный логин или пароль'
+    case 403:
+      return 'Доступ запрещён'
+    case 404:
+      return 'Ресурс не найден'
+    case 409:
+      return 'Конфликт данных'
+    case 422:
+      return 'Ошибка валидации'
+    case 429:
+      return 'Слишком много запросов, попробуйте позже'
+    case 500:
+      return 'Внутренняя ошибка сервера'
+    case 502:
+      return 'Сервер временно недоступен'
+    case 503:
+      return 'Сервис временно недоступен'
+    default:
+      return `Ошибка сервера (${status})`
+  }
 }

@@ -4,18 +4,47 @@ docs/
 .DS_Store
 Thumbs.db
 .idea/
-.vscode/
-bin/
-
-# Gradle
+.vscode/*
+!.vscode/extensions.json
+*.sw?
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+# Gradle / Kotlin (backend)
 .gradle/
 **/build/
+*.iml
+out/
 
-# Local env
+# Node / Vite / frontend
+node_modules/
+dist/
+**/dist/
+dist-ssr/
+.vite/
+**/.vite/
+*.tsbuildinfo
+coverage/
+**/coverage/
+
+# Local env (используйте .env.example как образец)
 .env
+.env.*.local
+!.env.example
+*.local
 
 # Logs
+logs/
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
 
-# Docker
+# Docker / misc
 *.pid
+
+# JVM / Kotlin (локальные копии при запуске не из Gradle)
+bin/

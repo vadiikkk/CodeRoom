@@ -9,8 +9,12 @@ import type {
   BlockResponse,
   CreateAssignmentRequest,
   CreateMaterialRequest,
+  EnrollmentResponse,
+  GroupResponse,
   MaterialResponse,
+  RoleInCourse,
 } from '@/entities/course/types'
+import { authApi } from '@/shared/api/auth'
 import { coursesApi } from '@/shared/api/courses'
 import { uploadFileToPresignedUrl } from '@/shared/lib/attachments'
 import { getErrorMessage } from '@/shared/lib/errors'
@@ -36,7 +40,8 @@ type AssignmentDraft = {
   description: string
   assignmentType: AssignmentType
   workType: 'INDIVIDUAL' | 'GROUP'
-  deadlineAt: string
+  deadlineDate: string
+  deadlineTime: string
   weight: string
   blockId: string
   position: string
@@ -69,7 +74,8 @@ const emptyAssignmentDraft = (): AssignmentDraft => ({
   description: '',
   assignmentType: 'TEXT',
   workType: 'INDIVIDUAL',
-  deadlineAt: '',
+  deadlineDate: '',
+  deadlineTime: '23:59',
   weight: '0.3',
   blockId: '',
   position: '10',
@@ -97,11 +103,22 @@ export function CourseManagePage() {
   })
   const [patValue, setPatValue] = useState('')
   const [newBlockTitle, setNewBlockTitle] = useState('')
-  const [newBlockPosition, setNewBlockPosition] = useState('10')
   const [editingMaterialId, setEditingMaterialId] = useState<string | null>(null)
   const [materialDraft, setMaterialDraft] = useState<MaterialDraft>(emptyMaterialDraft())
   const [editingAssignmentId, setEditingAssignmentId] = useState<string | null>(null)
   const [assignmentDraft, setAssignmentDraft] = useState<AssignmentDraft>(emptyAssignmentDraft())
+  const [enrollEmail, setEnrollEmail] = useState('')
+  const [enrollRole, setEnrollRole] = useState<RoleInCourse>('STUDENT')
+  const [bulkEmails, setBulkEmails] = useState('')
+  const [bulkRole, setBulkRole] = useState<RoleInCourse>('STUDENT')
+  const [bulkResult, setBulkResult] = useState<string | null>(null)
+  const [newGroupName, setNewGroupName] = useState('')
+  const [addMemberEmail, setAddMemberEmail] = useState<Record<string, string>>({})
+  const [lastError, setLastError] = useState<string | null>(null)
+
+  const onMutationError = (error: unknown) => {
+    setLastError(getErrorMessage(error))
+  }
 
   const courseQuery = useQuery({
     queryKey: ['course', courseId],
@@ -139,6 +156,126 @@ export function CourseManagePage() {
     enabled: Boolean(courseId),
   })
 
+  const enrollmentsQuery = useQuery({
+    queryKey: ['course-enrollments', courseId],
+    queryFn: () => coursesApi.listEnrollments(courseId!),
+    enabled: Boolean(courseId),
+  })
+
+  const enrollmentUserIds = useMemo(
+    () => enrollmentsQuery.data?.map((e) => e.userId) ?? [],
+    [enrollmentsQuery.data],
+  )
+
+  const enrollmentUsersQuery = useQuery({
+    queryKey: ['users-lookup', enrollmentUserIds],
+    queryFn: () => authApi.lookupByIds({ userIds: enrollmentUserIds }),
+    enabled: enrollmentUserIds.length > 0,
+  })
+
+  const enrollmentEmailMap = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const u of enrollmentUsersQuery.data?.users ?? []) {
+      map.set(u.userId, u.email)
+    }
+    return map
+  }, [enrollmentUsersQuery.data])
+
+  const addEnrollmentMutation = useMutation({
+    mutationFn: async () => {
+      const lookup = await authApi.lookupByEmails({ emails: [enrollEmail.trim()] })
+      const user = lookup.users[0]
+      if (!user) {
+        throw new Error(`Пользователь ${enrollEmail.trim()} не найден`)
+      }
+      await coursesApi.upsertEnrollment(courseId!, { userId: user.userId, roleInCourse: enrollRole })
+    },
+    onSuccess: () => {
+      setEnrollEmail('')
+      queryClient.invalidateQueries({ queryKey: ['course-enrollments', courseId] })
+    },
+  })
+
+  const removeEnrollmentMutation = useMutation({
+    mutationFn: (userId: string) => coursesApi.deleteEnrollment(courseId!, userId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['course-enrollments', courseId] })
+    },
+    onError: onMutationError,
+  })
+
+  const bulkEnrollMutation = useMutation({
+    mutationFn: () => {
+      const emails = bulkEmails
+        .split(/[\n,;]+/)
+        .map((e) => e.trim())
+        .filter(Boolean)
+      if (emails.length === 0) throw new Error('Введите хотя бы один email')
+      return coursesApi.upsertEnrollmentsByEmail(courseId!, { emails, roleInCourse: bulkRole })
+    },
+    onSuccess: (result) => {
+      setBulkEmails('')
+      queryClient.invalidateQueries({ queryKey: ['course-enrollments', courseId] })
+      setLastError(null)
+      setBulkResult(`Добавлено/обновлено: ${result.addedOrUpdated}`)
+    },
+  })
+
+  const groupsQuery = useQuery({
+    queryKey: ['course-groups', courseId],
+    queryFn: () => coursesApi.listGroups(courseId!),
+    enabled: Boolean(courseId),
+  })
+
+  const createGroupMutation = useMutation({
+    mutationFn: () => coursesApi.createGroup(courseId!, { name: newGroupName.trim() }),
+    onSuccess: () => {
+      setNewGroupName('')
+      queryClient.invalidateQueries({ queryKey: ['course-groups', courseId] })
+    },
+  })
+
+  const deleteGroupMutation = useMutation({
+    mutationFn: (groupId: string) => coursesApi.deleteGroup(courseId!, groupId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['course-groups', courseId] }),
+    onError: onMutationError,
+  })
+
+  const renameGroupMutation = useMutation({
+    mutationFn: ({ groupId, name }: { groupId: string; name: string }) =>
+      coursesApi.updateGroup(courseId!, groupId, { name }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['course-groups', courseId] }),
+    onError: onMutationError,
+  })
+
+  const addGroupMemberMutation = useMutation({
+    mutationFn: async ({ groupId, email }: { groupId: string; email: string }) => {
+      const lookup = await authApi.lookupByEmails({ emails: [email.trim()] })
+      const user = lookup.users[0]
+      if (!user) throw new Error(`Пользователь ${email.trim()} не найден`)
+      return coursesApi.addGroupMember(courseId!, groupId, { userId: user.userId })
+    },
+    onSuccess: (_data, variables) => {
+      setAddMemberEmail((prev) => ({ ...prev, [variables.groupId]: '' }))
+      queryClient.invalidateQueries({ queryKey: ['course-groups', courseId] })
+    },
+  })
+
+  const removeGroupMemberMutation = useMutation({
+    mutationFn: ({ groupId, userId }: { groupId: string; userId: string }) =>
+      coursesApi.removeGroupMember(courseId!, groupId, userId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['course-groups', courseId] }),
+    onError: onMutationError,
+  })
+
+  const deleteCourseMutation = useMutation({
+    mutationFn: () => coursesApi.deleteCourse(courseId!),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['courses'] })
+      window.location.href = '/app/courses'
+    },
+  })
+
   useEffect(() => {
     if (!courseQuery.data) {
       return
@@ -154,6 +291,11 @@ export function CourseManagePage() {
   const blocks = useMemo(() => structureQuery.data?.blocks.map((entry) => entry.block) ?? [], [
     structureQuery.data,
   ])
+
+  const sortedBlocks = useMemo(
+    () => blocks.slice().sort((a, b) => a.position - b.position),
+    [blocks],
+  )
 
   const invalidateCourseData = async () => {
     await Promise.all([
@@ -196,20 +338,23 @@ export function CourseManagePage() {
   const clearGithubPatMutation = useMutation({
     mutationFn: () => coursesApi.clearGithubPat(courseId!),
     onSuccess: invalidateCourseData,
+    onError: onMutationError,
   })
 
   const createBlockMutation = useMutation({
-    mutationFn: () =>
-      coursesApi.createBlock(courseId!, {
+    mutationFn: () => {
+      const maxPos = blocks.length > 0 ? Math.max(...blocks.map((b) => b.position)) : 0
+      return coursesApi.createBlock(courseId!, {
         title: newBlockTitle.trim(),
-        position: Number(newBlockPosition),
+        position: maxPos + 10,
         isVisible: true,
-      }),
+      })
+    },
     onSuccess: async () => {
       setNewBlockTitle('')
-      setNewBlockPosition('10')
       await invalidateCourseData()
     },
+    onError: onMutationError,
   })
 
   const updateBlockMutation = useMutation({
@@ -230,11 +375,13 @@ export function CourseManagePage() {
         isVisible,
       }),
     onSuccess: invalidateCourseData,
+    onError: onMutationError,
   })
 
   const deleteBlockMutation = useMutation({
     mutationFn: (blockId: string) => coursesApi.deleteBlock(courseId!, blockId),
     onSuccess: invalidateCourseData,
+    onError: onMutationError,
   })
 
   const saveMaterialMutation = useMutation({
@@ -257,12 +404,14 @@ export function CourseManagePage() {
         })
       }
 
+      const maxMaterialPos = materials.length > 0 ? Math.max(...materials.map((m) => m.position)) : 0
+
       const payload: CreateMaterialRequest = {
         title: materialDraft.title.trim(),
         description: materialDraft.description.trim() || undefined,
         body: materialDraft.body.trim() || undefined,
         blockId: materialDraft.blockId || undefined,
-        position: Number(materialDraft.position),
+        position: maxMaterialPos + 10,
         isVisible: materialDraft.isVisible,
         attachmentIds,
       }
@@ -279,6 +428,7 @@ export function CourseManagePage() {
   const deleteMaterialMutation = useMutation({
     mutationFn: (materialId: string) => coursesApi.deleteMaterial(materialId),
     onSuccess: invalidateCourseData,
+    onError: onMutationError,
   })
 
   const saveAssignmentMutation = useMutation({
@@ -288,9 +438,14 @@ export function CourseManagePage() {
         ...(await uploadFiles(courseId!, assignmentDraft.files)),
       ]
 
-      const deadlineAt = assignmentDraft.deadlineAt
-        ? new Date(assignmentDraft.deadlineAt).toISOString()
-        : undefined
+      const parsedDeadline = parseDeadlineDraft(
+        assignmentDraft.deadlineDate,
+        assignmentDraft.deadlineTime,
+      )
+      if (parsedDeadline.error) {
+        throw new Error(parsedDeadline.error)
+      }
+      const deadlineAt = parsedDeadline.iso
 
       if (editingAssignmentId) {
         const existingAssignment = assignmentsQuery.data?.find(
@@ -323,6 +478,8 @@ export function CourseManagePage() {
         })
       }
 
+      const maxAssignmentPos = assignments.length > 0 ? Math.max(...assignments.map((a) => a.position)) : 0
+
       const payload: CreateAssignmentRequest = {
         title: assignmentDraft.title.trim(),
         description: assignmentDraft.description.trim() || undefined,
@@ -331,7 +488,7 @@ export function CourseManagePage() {
         deadlineAt,
         weight: Number(assignmentDraft.weight),
         blockId: assignmentDraft.blockId || undefined,
-        position: Number(assignmentDraft.position),
+        position: maxAssignmentPos + 10,
         isVisible: assignmentDraft.isVisible,
         attachmentIds,
         code:
@@ -357,16 +514,19 @@ export function CourseManagePage() {
       setAssignmentDraft(emptyAssignmentDraft())
       await invalidateCourseData()
     },
+    onError: onMutationError,
   })
 
   const deleteAssignmentMutation = useMutation({
     mutationFn: (assignmentId: string) => coursesApi.deleteAssignment(assignmentId),
     onSuccess: invalidateCourseData,
+    onError: onMutationError,
   })
 
   const publishAssignmentMutation = useMutation({
     mutationFn: (assignmentId: string) => coursesApi.publishAssignment(assignmentId),
     onSuccess: invalidateCourseData,
+    onError: onMutationError,
   })
 
   if (!courseId) {
@@ -384,7 +544,9 @@ export function CourseManagePage() {
     structureQuery.isPending ||
     materialsQuery.isPending ||
     assignmentsQuery.isPending ||
-    githubPatQuery.isPending
+    githubPatQuery.isPending ||
+    enrollmentsQuery.isPending ||
+    groupsQuery.isPending
   ) {
     return <PageLoader label="Загружаем панель курса..." />
   }
@@ -396,6 +558,8 @@ export function CourseManagePage() {
     materialsQuery.error,
     assignmentsQuery.error,
     githubPatQuery.error,
+    enrollmentsQuery.error,
+    groupsQuery.error,
   ].find(Boolean)
 
   if (firstError) {
@@ -412,6 +576,8 @@ export function CourseManagePage() {
   const materials = materialsQuery.data!
   const assignments = assignmentsQuery.data!
   const githubPatStatus = githubPatQuery.data!
+  const enrollments = enrollmentsQuery.data!
+  const groups = groupsQuery.data!
 
   if (membership.roleInCourse !== 'TEACHER') {
     return (
@@ -424,6 +590,18 @@ export function CourseManagePage() {
 
   return (
     <div className="space-y-8">
+      {lastError ? (
+        <div className="flex items-start justify-between rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+          <span>{lastError}</span>
+          <button
+            className="ml-4 shrink-0 text-rose-400 transition hover:text-rose-200"
+            onClick={() => setLastError(null)}
+          >
+            ✕
+          </button>
+        </div>
+      ) : null}
+
       <section className="rounded-3xl border border-slate-800 bg-slate-950/70 p-8">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div>
@@ -444,6 +622,15 @@ export function CourseManagePage() {
             </span>
           </div>
         </div>
+      </section>
+
+      <section className="flex flex-wrap gap-3">
+        <Link
+          to={`/app/courses/${courseId}/gradebook`}
+          className="inline-flex rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm font-medium text-slate-100 transition hover:border-slate-600 hover:bg-slate-800"
+        >
+          Ведомость
+        </Link>
       </section>
 
       <section className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
@@ -485,7 +672,7 @@ export function CourseManagePage() {
         <PanelCard title="GitHub PAT">
           <div className="space-y-4">
             <p className="text-sm text-slate-400">
-              Токен нужен для code assignments и интеграции с GitHub-репозиториями.
+              Токен нужен для интеграции с GitHub-репозиториями.
             </p>
             <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 text-sm text-slate-300">
               {githubPatStatus.configured
@@ -527,17 +714,11 @@ export function CourseManagePage() {
       <section className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
         <PanelCard title="Блоки курса">
           <div className="space-y-5">
-            <div className="grid gap-3 md:grid-cols-[1fr_140px_auto]">
+            <div className="grid gap-3 md:grid-cols-[1fr_auto]">
               <Input
                 value={newBlockTitle}
                 onChange={(event) => setNewBlockTitle(event.target.value)}
                 placeholder="Название блока"
-              />
-              <Input
-                type="number"
-                value={newBlockPosition}
-                onChange={(event) => setNewBlockPosition(event.target.value)}
-                placeholder="Позиция"
               />
               <Button
                 onClick={() => createBlockMutation.mutate()}
@@ -550,18 +731,47 @@ export function CourseManagePage() {
             {blocks.length === 0 ? (
               <p className="text-sm text-slate-400">Блоков пока нет.</p>
             ) : (
-              <div className="space-y-4">
-                {blocks
-                  .slice()
-                  .sort((left, right) => left.position - right.position)
-                  .map((block) => (
-                    <BlockEditor
-                      key={block.blockId}
-                      block={block}
-                      onSave={(payload) => updateBlockMutation.mutate(payload)}
-                      onDelete={(blockId) => deleteBlockMutation.mutate(blockId)}
-                    />
-                  ))}
+              <div className="space-y-3">
+                {sortedBlocks.map((block, index) => (
+                  <BlockEditor
+                    key={block.blockId}
+                    block={block}
+                    isFirst={index === 0}
+                    isLast={index === sortedBlocks.length - 1}
+                    onSave={(payload) => updateBlockMutation.mutate(payload)}
+                    onDelete={(blockId) => deleteBlockMutation.mutate(blockId)}
+                    onMoveUp={() => {
+                      const prev = sortedBlocks[index - 1]
+                      updateBlockMutation.mutate({
+                        blockId: block.blockId,
+                        title: block.title,
+                        position: prev.position,
+                        isVisible: block.isVisible,
+                      })
+                      updateBlockMutation.mutate({
+                        blockId: prev.blockId,
+                        title: prev.title,
+                        position: block.position,
+                        isVisible: prev.isVisible,
+                      })
+                    }}
+                    onMoveDown={() => {
+                      const next = sortedBlocks[index + 1]
+                      updateBlockMutation.mutate({
+                        blockId: block.blockId,
+                        title: block.title,
+                        position: next.position,
+                        isVisible: block.isVisible,
+                      })
+                      updateBlockMutation.mutate({
+                        blockId: next.blockId,
+                        title: next.title,
+                        position: block.position,
+                        isVisible: next.isVisible,
+                      })
+                    }}
+                  />
+                ))}
               </div>
             )}
           </div>
@@ -595,26 +805,15 @@ export function CourseManagePage() {
                 }
               />
             </Field>
-            <div className="grid gap-4 md:grid-cols-2">
-              <Field label="Блок">
-                <SelectField
-                  value={materialDraft.blockId}
-                  onChange={(value) =>
-                    setMaterialDraft((prev) => ({ ...prev, blockId: value }))
-                  }
-                  options={buildBlockOptions(blocks)}
-                />
-              </Field>
-              <Field label="Позиция">
-                <Input
-                  type="number"
-                  value={materialDraft.position}
-                  onChange={(event) =>
-                    setMaterialDraft((prev) => ({ ...prev, position: event.target.value }))
-                  }
-                />
-              </Field>
-            </div>
+            <Field label="Блок">
+              <SelectField
+                value={materialDraft.blockId}
+                onChange={(value) =>
+                  setMaterialDraft((prev) => ({ ...prev, blockId: value }))
+                }
+                options={buildBlockOptions(blocks)}
+              />
+            </Field>
             <CheckboxRow
               label="Материал виден студентам"
               checked={materialDraft.isVisible}
@@ -673,7 +872,6 @@ export function CourseManagePage() {
               description: material.description || material.body || 'Без описания',
               meta: [
                 material.blockId ? `Блок: ${getBlockTitle(blocks, material.blockId)}` : 'Без блока',
-                `Позиция: ${material.position}`,
                 material.isVisible ? 'Виден студентам' : 'Скрыт',
               ],
               onEdit: () => {
@@ -763,23 +961,39 @@ export function CourseManagePage() {
                   options={buildBlockOptions(blocks)}
                 />
               </Field>
-              <Field label="Позиция">
-                <Input
-                  type="number"
-                  value={assignmentDraft.position}
-                  onChange={(event) =>
-                    setAssignmentDraft((prev) => ({ ...prev, position: event.target.value }))
-                  }
-                />
-              </Field>
               <Field label="Дедлайн">
-                <Input
-                  type="datetime-local"
-                  value={assignmentDraft.deadlineAt}
-                  onChange={(event) =>
-                    setAssignmentDraft((prev) => ({ ...prev, deadlineAt: event.target.value }))
-                  }
-                />
+                <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end sm:gap-3">
+                  <Input
+                    type="date"
+                    className="date-time-picker-input w-full shrink-0 sm:min-w-[15rem] sm:max-w-none"
+                    value={assignmentDraft.deadlineDate}
+                    min="2000-01-01"
+                    max="2100-12-31"
+                    onChange={(event) =>
+                      setAssignmentDraft((prev) => ({ ...prev, deadlineDate: event.target.value }))
+                    }
+                  />
+                  <Input
+                    type="time"
+                    className="date-time-picker-input w-full shrink-0 sm:min-w-[8.5rem] sm:max-w-none"
+                    value={assignmentDraft.deadlineTime}
+                    onChange={(event) =>
+                      setAssignmentDraft((prev) => ({ ...prev, deadlineTime: event.target.value }))
+                    }
+                  />
+                  <button
+                    type="button"
+                    className="shrink-0 rounded-xl border border-slate-600 px-3 py-2 text-sm text-slate-300 transition hover:border-slate-500 hover:text-white"
+                    onClick={() =>
+                      setAssignmentDraft((prev) => ({ ...prev, deadlineDate: '', deadlineTime: '' }))
+                    }
+                  >
+                    Без срока
+                  </button>
+                </div>
+                <p className="mt-2 text-xs text-slate-500">
+                  Укажите дату и время или нажмите «Без срока», если дедлайн не нужен.
+                </p>
               </Field>
             </div>
 
@@ -950,7 +1164,6 @@ export function CourseManagePage() {
                   assignment.blockId
                     ? `Блок: ${getBlockTitle(blocks, assignment.blockId)}`
                     : 'Без блока',
-                  `Позиция: ${assignment.position}`,
                   assignment.isVisible ? 'Видно студентам' : 'Скрыто',
                 ],
                 extra:
@@ -964,20 +1177,327 @@ export function CourseManagePage() {
                   setAssignmentDraft(buildAssignmentDraft(assignment))
                 },
                 onDelete: () => deleteAssignmentMutation.mutate(assignment.assignmentId),
-                action:
-                  assignment.assignmentType === 'CODE' && !assignment.code?.publishedAt ? (
-                    <Button
-                      variant="secondary"
-                      onClick={() => publishAssignmentMutation.mutate(assignment.assignmentId)}
-                      isLoading={publishAssignmentMutation.isPending}
+                action: (
+                  <>
+                    <Link
+                      to={`/app/courses/${courseId}/assignments/${assignment.assignmentId}/grading`}
+                      className="inline-flex items-center justify-center rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm font-medium text-slate-100 transition hover:border-slate-600 hover:bg-slate-800"
                     >
-                      Опубликовать
-                    </Button>
-                  ) : undefined,
+                      Проверить
+                    </Link>
+                    {assignment.assignmentType === 'CODE' && !assignment.code?.publishedAt ? (
+                      <Button
+                        variant="secondary"
+                        onClick={() => publishAssignmentMutation.mutate(assignment.assignmentId)}
+                        isLoading={publishAssignmentMutation.isPending}
+                      >
+                        Опубликовать
+                      </Button>
+                    ) : null}
+                  </>
+                ),
               }))}
           />
         </PanelCard>
       </section>
+
+      <PanelCard title="Участники курса">
+        <div className="space-y-4">
+          <div className="grid gap-3 md:grid-cols-[1fr_160px_auto]">
+            <Input
+              value={enrollEmail}
+              onChange={(event) => setEnrollEmail(event.target.value)}
+              placeholder="Email пользователя"
+            />
+            <select
+              className="w-full rounded-xl border border-slate-700 bg-slate-950/80 px-4 py-3 text-sm text-slate-100 outline-none transition focus:border-blue-400"
+              value={enrollRole}
+              onChange={(event) => setEnrollRole(event.target.value as RoleInCourse)}
+            >
+              <option value="STUDENT">Студент</option>
+              <option value="ASSISTANT">Ассистент</option>
+              <option value="TEACHER">Преподаватель</option>
+            </select>
+            <Button
+              onClick={() => addEnrollmentMutation.mutate()}
+              isLoading={addEnrollmentMutation.isPending}
+            >
+              Добавить
+            </Button>
+          </div>
+          {addEnrollmentMutation.isError ? (
+            <InlineError message={getErrorMessage(addEnrollmentMutation.error)} />
+          ) : null}
+
+          {enrollments.length === 0 ? (
+            <p className="text-sm text-slate-500">Участников пока нет.</p>
+          ) : (
+            <div className="space-y-2">
+              {enrollments.map((enrollment) => (
+                <EnrollmentRow
+                  key={enrollment.userId}
+                  enrollment={enrollment}
+                  email={enrollmentEmailMap.get(enrollment.userId) ?? enrollment.userId.slice(0, 8)}
+                  onRemove={() => removeEnrollmentMutation.mutate(enrollment.userId)}
+                  isRemoving={removeEnrollmentMutation.isPending}
+                />
+              ))}
+            </div>
+          )}
+          <div className="border-t border-slate-800 pt-4">
+            <h3 className="text-sm font-semibold text-white">Добавление нескольких пользователей</h3>
+            <p className="mt-1 text-xs text-slate-500">
+              Введите email через запятую, точку с запятой или с новой строки.
+            </p>
+            <Textarea
+              className="mt-3"
+              rows={4}
+              value={bulkEmails}
+              onChange={(event) => setBulkEmails(event.target.value)}
+              placeholder={'student1@example.com\nstudent2@example.com'}
+            />
+            <div className="mt-3 flex flex-wrap items-end gap-3">
+              <select
+                className="rounded-xl border border-slate-700 bg-slate-950/80 px-4 py-3 text-sm text-slate-100 outline-none transition focus:border-blue-400"
+                value={bulkRole}
+                onChange={(event) => setBulkRole(event.target.value as RoleInCourse)}
+              >
+                <option value="STUDENT">Студент</option>
+                <option value="ASSISTANT">Ассистент</option>
+                <option value="TEACHER">Преподаватель</option>
+              </select>
+              <Button
+                onClick={() => bulkEnrollMutation.mutate()}
+                isLoading={bulkEnrollMutation.isPending}
+              >
+                Добавить списком
+              </Button>
+            </div>
+            {bulkEnrollMutation.isError ? (
+              <InlineError message={getErrorMessage(bulkEnrollMutation.error)} />
+            ) : null}
+            {bulkResult ? (
+              <div className="mt-2 rounded-2xl border border-green-500/30 bg-green-500/10 px-4 py-3 text-sm text-green-200">
+                {bulkResult}
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </PanelCard>
+
+      <PanelCard title="Группы">
+        <div className="space-y-4">
+          <div className="grid gap-3 md:grid-cols-[1fr_auto]">
+            <Input
+              value={newGroupName}
+              onChange={(event) => setNewGroupName(event.target.value)}
+              placeholder="Название группы"
+            />
+            <Button
+              onClick={() => createGroupMutation.mutate()}
+              isLoading={createGroupMutation.isPending}
+            >
+              Создать группу
+            </Button>
+          </div>
+          {createGroupMutation.isError ? (
+            <InlineError message={getErrorMessage(createGroupMutation.error)} />
+          ) : null}
+
+          {groups.length === 0 ? (
+            <p className="text-sm text-slate-500">Групп пока нет.</p>
+          ) : (
+            <div className="space-y-4">
+              {groups.map((group) => (
+                <GroupCard
+                  key={group.groupId}
+                  group={group}
+                  emailMap={enrollmentEmailMap}
+                  memberEmail={addMemberEmail[group.groupId] ?? ''}
+                  onMemberEmailChange={(value) =>
+                    setAddMemberEmail((prev) => ({ ...prev, [group.groupId]: value }))
+                  }
+                  onAddMember={() =>
+                    addGroupMemberMutation.mutate({
+                      groupId: group.groupId,
+                      email: addMemberEmail[group.groupId] ?? '',
+                    })
+                  }
+                  onRemoveMember={(userId) =>
+                    removeGroupMemberMutation.mutate({ groupId: group.groupId, userId })
+                  }
+                  onRename={(name) =>
+                    renameGroupMutation.mutate({ groupId: group.groupId, name })
+                  }
+                  onDelete={() => deleteGroupMutation.mutate(group.groupId)}
+                  isAddingMember={addGroupMemberMutation.isPending}
+                  addMemberError={addGroupMemberMutation.isError ? getErrorMessage(addGroupMemberMutation.error) : null}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </PanelCard>
+
+      <PanelCard title="Опасная зона">
+        <div className="space-y-3">
+          <p className="text-sm text-slate-400">
+            Удаление курса необратимо. Все материалы, задания, сдачи и оценки будут удалены.
+          </p>
+          {deleteCourseMutation.isError ? (
+            <InlineError message={getErrorMessage(deleteCourseMutation.error)} />
+          ) : null}
+          <Button
+            variant="secondary"
+            className="border-rose-500/40 text-rose-300 hover:border-rose-400 hover:bg-rose-500/10"
+            onClick={() => {
+              if (window.confirm(`Вы уверены, что хотите удалить курс "${course.title}"?`)) {
+                deleteCourseMutation.mutate()
+              }
+            }}
+            isLoading={deleteCourseMutation.isPending}
+          >
+            Удалить курс
+          </Button>
+        </div>
+      </PanelCard>
+    </div>
+  )
+}
+
+function GroupCard({
+  group,
+  emailMap,
+  memberEmail,
+  onMemberEmailChange,
+  onAddMember,
+  onRemoveMember,
+  onRename,
+  onDelete,
+  isAddingMember,
+  addMemberError,
+}: {
+  group: GroupResponse
+  emailMap: Map<string, string>
+  memberEmail: string
+  onMemberEmailChange: (value: string) => void
+  onAddMember: () => void
+  onRemoveMember: (userId: string) => void
+  onRename: (name: string) => void
+  onDelete: () => void
+  isAddingMember: boolean
+  addMemberError: string | null
+}) {
+  const [isEditing, setIsEditing] = useState(false)
+  const [editName, setEditName] = useState(group.name)
+
+  return (
+    <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        {isEditing ? (
+          <div className="flex flex-1 items-center gap-2">
+            <Input
+              value={editName}
+              onChange={(event) => setEditName(event.target.value)}
+            />
+            <Button
+              onClick={() => {
+                onRename(editName.trim())
+                setIsEditing(false)
+              }}
+            >
+              Ок
+            </Button>
+            <Button variant="ghost" onClick={() => setIsEditing(false)}>
+              Отмена
+            </Button>
+          </div>
+        ) : (
+          <div>
+            <div className="text-sm font-semibold text-white">{group.name}</div>
+            <div className="mt-0.5 text-xs text-slate-500">
+              {group.members.length} участников · {formatDateTime(group.createdAt)}
+            </div>
+          </div>
+        )}
+        {!isEditing ? (
+          <div className="flex gap-2">
+            <Button variant="ghost" onClick={() => { setEditName(group.name); setIsEditing(true) }}>
+              Переименовать
+            </Button>
+            <Button variant="ghost" onClick={onDelete}>
+              Удалить
+            </Button>
+          </div>
+        ) : null}
+      </div>
+
+      {group.members.length > 0 ? (
+        <div className="mt-4 space-y-1">
+          {group.members.map((member) => (
+            <div
+              key={member.userId}
+              className="flex items-center justify-between rounded-xl px-3 py-2 text-sm hover:bg-slate-800/60"
+            >
+              <span className="text-slate-300">
+                {emailMap.get(member.userId) ?? member.userId.slice(0, 8)}
+              </span>
+              <button
+                className="text-xs text-slate-500 transition hover:text-rose-400"
+                onClick={() => onRemoveMember(member.userId)}
+              >
+                Убрать
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      <div className="mt-3 grid gap-2 md:grid-cols-[1fr_auto]">
+        <Input
+          value={memberEmail}
+          onChange={(event) => onMemberEmailChange(event.target.value)}
+          placeholder="Email участника"
+        />
+        <Button variant="secondary" onClick={onAddMember} isLoading={isAddingMember}>
+          Добавить
+        </Button>
+      </div>
+      {addMemberError ? (
+        <div className="mt-2 text-xs text-rose-400">{addMemberError}</div>
+      ) : null}
+    </div>
+  )
+}
+
+function EnrollmentRow({
+  enrollment,
+  email,
+  onRemove,
+  isRemoving,
+}: {
+  enrollment: EnrollmentResponse
+  email: string
+  onRemove: () => void
+  isRemoving: boolean
+}) {
+  const roleLabels: Record<RoleInCourse, string> = {
+    TEACHER: 'Преподаватель',
+    ASSISTANT: 'Ассистент',
+    STUDENT: 'Студент',
+  }
+
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+      <div>
+        <div className="text-sm font-medium text-white">{email}</div>
+        <div className="mt-0.5 text-xs text-slate-500">
+          {roleLabels[enrollment.roleInCourse]} · {formatDateTime(enrollment.createdAt)}
+        </div>
+      </div>
+      <Button variant="ghost" onClick={onRemove} isLoading={isRemoving}>
+        Удалить
+      </Button>
     </div>
   )
 }
@@ -1008,7 +1528,7 @@ function buildBlockOptions(blocks: BlockResponse[]) {
       .sort((left, right) => left.position - right.position)
       .map((block) => ({
         value: block.blockId,
-        label: `${block.position}. ${block.title}`,
+        label: block.title,
       })),
   ]
 }
@@ -1036,7 +1556,7 @@ function buildAssignmentDraft(assignment: AssignmentResponse): AssignmentDraft {
     description: assignment.description ?? '',
     assignmentType: assignment.assignmentType,
     workType: assignment.workType,
-    deadlineAt: assignment.deadlineAt ? toDateTimeLocalValue(assignment.deadlineAt) : '',
+    ...splitDeadlineFromIso(assignment.deadlineAt),
     weight: String(assignment.weight),
     blockId: assignment.blockId ?? '',
     position: String(assignment.position),
@@ -1054,8 +1574,46 @@ function buildAssignmentDraft(assignment: AssignmentResponse): AssignmentDraft {
   }
 }
 
-function toDateTimeLocalValue(value: string) {
-  return new Date(value).toISOString().slice(0, 16)
+function splitDeadlineFromIso(iso: string | null | undefined): Pick<AssignmentDraft, 'deadlineDate' | 'deadlineTime'> {
+  if (!iso) {
+    return { deadlineDate: '', deadlineTime: '' }
+  }
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) {
+    return { deadlineDate: '', deadlineTime: '' }
+  }
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  const h = String(d.getHours()).padStart(2, '0')
+  const min = String(d.getMinutes()).padStart(2, '0')
+  return { deadlineDate: `${y}-${m}-${day}`, deadlineTime: `${h}:${min}` }
+}
+
+function parseDeadlineDraft(
+  deadlineDate: string,
+  deadlineTime: string,
+): { iso: string | undefined; error?: string } {
+  const date = deadlineDate.trim()
+  const time = deadlineTime.trim()
+  if (!date && !time) {
+    return { iso: undefined }
+  }
+  if (!date || !time) {
+    return {
+      iso: undefined,
+      error: 'Укажите и дату, и время дедлайна или снимите оба поля.',
+    }
+  }
+  const local = new Date(`${date}T${time}`)
+  if (Number.isNaN(local.getTime())) {
+    return { iso: undefined, error: 'Некорректная дата или время.' }
+  }
+  const year = local.getFullYear()
+  if (year < 2000 || year > 2100) {
+    return { iso: undefined, error: 'Год должен быть в диапазоне 2000–2100.' }
+  }
+  return { iso: local.toISOString() }
 }
 
 function getAssignmentTypeName(type: AssignmentType) {
@@ -1245,10 +1803,16 @@ function RecordList({
 
 function BlockEditor({
   block,
+  isFirst,
+  isLast,
   onSave,
   onDelete,
+  onMoveUp,
+  onMoveDown,
 }: {
   block: BlockResponse
+  isFirst: boolean
+  isLast: boolean
   onSave: (payload: {
     blockId: string
     title: string
@@ -1256,45 +1820,101 @@ function BlockEditor({
     isVisible: boolean
   }) => void
   onDelete: (blockId: string) => void
+  onMoveUp: () => void
+  onMoveDown: () => void
 }) {
+  const [isEditing, setIsEditing] = useState(false)
   const [title, setTitle] = useState(block.title)
-  const [position, setPosition] = useState(String(block.position))
   const [isVisible, setIsVisible] = useState(block.isVisible)
 
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
-      <div className="grid gap-3 md:grid-cols-[1fr_120px_auto_auto]">
-        <Input value={title} onChange={(event) => setTitle(event.target.value)} />
-        <Input
-          type="number"
-          value={position}
-          onChange={(event) => setPosition(event.target.value)}
-        />
-        <label className="flex items-center gap-2 text-sm text-slate-200">
+      <div className="flex items-center gap-3">
+        <div className="flex flex-col gap-0.5">
+          <button
+            className="rounded px-1 text-slate-500 transition hover:bg-slate-800 hover:text-slate-200 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-slate-500"
+            disabled={isFirst}
+            onClick={onMoveUp}
+            title="Переместить вверх"
+          >
+            ▲
+          </button>
+          <button
+            className="rounded px-1 text-slate-500 transition hover:bg-slate-800 hover:text-slate-200 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-slate-500"
+            disabled={isLast}
+            onClick={onMoveDown}
+            title="Переместить вниз"
+          >
+            ▼
+          </button>
+        </div>
+
+        <div className="min-w-0 flex-1">
+          {isEditing ? (
+            <Input value={title} onChange={(event) => setTitle(event.target.value)} />
+          ) : (
+            <div className="text-sm font-medium text-white">{block.title}</div>
+          )}
+        </div>
+
+        <label className="flex shrink-0 items-center gap-1.5 text-xs text-slate-400">
           <input
             type="checkbox"
-            checked={isVisible}
-            onChange={(event) => setIsVisible(event.target.checked)}
+            checked={isEditing ? isVisible : block.isVisible}
+            onChange={(event) => {
+              if (isEditing) {
+                setIsVisible(event.target.checked)
+              } else {
+                onSave({
+                  blockId: block.blockId,
+                  title: block.title,
+                  position: block.position,
+                  isVisible: event.target.checked,
+                })
+              }
+            }}
           />
-          Видим
+          {(isEditing ? isVisible : block.isVisible) ? 'Видим' : 'Скрыт'}
         </label>
-        <div className="flex gap-2">
-          <Button
-            variant="secondary"
-            onClick={() =>
-              onSave({
-                blockId: block.blockId,
-                title: title.trim(),
-                position: Number(position),
-                isVisible,
-              })
-            }
-          >
-            Сохранить
-          </Button>
-          <Button variant="secondary" onClick={() => onDelete(block.blockId)}>
-            Удалить
-          </Button>
+
+        <div className="flex shrink-0 gap-1.5">
+          {isEditing ? (
+            <>
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  onSave({
+                    blockId: block.blockId,
+                    title: title.trim(),
+                    position: block.position,
+                    isVisible,
+                  })
+                  setIsEditing(false)
+                }}
+              >
+                Сохранить
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setTitle(block.title)
+                  setIsVisible(block.isVisible)
+                  setIsEditing(false)
+                }}
+              >
+                Отмена
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button variant="ghost" onClick={() => setIsEditing(true)}>
+                Изменить
+              </Button>
+              <Button variant="ghost" onClick={() => onDelete(block.blockId)}>
+                Удалить
+              </Button>
+            </>
+          )}
         </div>
       </div>
     </div>

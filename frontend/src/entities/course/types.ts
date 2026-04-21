@@ -308,3 +308,120 @@ export interface UpdateAssignmentRequest {
   attachmentIds?: string[]
   code?: UpdateCodeAssignmentRequest
 }
+
+export interface GradeSubmissionRequest {
+  score: number
+  comment?: string
+}
+
+export interface EnrollmentResponse {
+  userId: string
+  roleInCourse: RoleInCourse
+  createdAt: string
+}
+
+export interface UpsertEnrollmentRequest {
+  userId: string
+  roleInCourse: RoleInCourse
+}
+
+export interface GradebookAssignmentResponse {
+  assignmentId: string
+  title: string
+  assignmentType: AssignmentType
+  weight: number
+}
+
+export interface GradebookEntryResponse {
+  assignmentId: string
+  submissionId?: string
+  codeAttemptId?: string
+  status?: string
+  score?: number
+  weightedScore?: number
+  comment?: string
+  ownerType?: SubmissionOwnerType
+  ownerGroupId?: string
+  ownerGroupName?: string
+  submittedAt?: string
+  gradedAt?: string
+}
+
+export interface GradebookStudentRowResponse {
+  userId: string
+  entries: GradebookEntryResponse[]
+  totalWeightedScore: number
+}
+
+export interface CourseGradebookResponse {
+  assignments: GradebookAssignmentResponse[]
+  rows: GradebookStudentRowResponse[]
+}
+
+export interface MyGradebookResponse {
+  userId: string
+  assignments: GradebookAssignmentResponse[]
+  entries: GradebookEntryResponse[]
+  totalWeightedScore: number
+}
+
+export interface LookupUserDto {
+  userId: string
+  email: string
+}
+
+export interface GroupMemberResponse {
+  userId: string
+  createdAt: string
+}
+
+export interface GroupResponse {
+  groupId: string
+  courseId: string
+  name: string
+  members: GroupMemberResponse[]
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CreateGroupRequest {
+  name: string
+}
+
+export interface UpdateGroupRequest {
+  name: string
+}
+
+export interface AddGroupMemberRequest {
+  userId: string
+}
+
+export interface CreateItemRequest {
+  blockId?: string
+  itemType: CourseItemType
+  refId: string
+  position: number
+  isVisible?: boolean
+}
+
+export interface UpdateItemRequest {
+  blockId?: string
+  itemType?: CourseItemType
+  refId?: string
+  position?: number
+  isVisible?: boolean
+}
+
+export interface UpsertEnrollmentsByEmailRequest {
+  emails: string[]
+  roleInCourse: RoleInCourse
+}
+
+export interface UpsertEnrollmentsByEmailResponse {
+  addedOrUpdated: number
+}
+
+export interface ChangePasswordRequest {
+  oldPassword: string
+  newPassword: string
+}

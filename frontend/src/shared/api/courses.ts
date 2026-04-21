@@ -1,17 +1,26 @@
 import type {
+  AddGroupMemberRequest,
   AssignmentResponse,
   CodeAttemptLogDownloadResponse,
   CodeAttemptResponse,
+  CourseGradebookResponse,
   CreateAssignmentRequest,
   CreateBlockRequest,
+  CreateGroupRequest,
+  CreateItemRequest,
   CourseResponse,
   CourseStructureResponse,
   CreateCodeAttemptRequest,
   CreateCourseRequest,
   CreateMaterialRequest,
   CreateSubmissionRequest,
+  EnrollmentResponse,
   GithubPatStatusResponse,
+  GradeSubmissionRequest,
+  GroupResponse,
+  ItemResponse,
   MaterialResponse,
+  MyGradebookResponse,
   MyMembershipResponse,
   PresignDownloadAttachmentResponse,
   PresignUploadAttachmentRequest,
@@ -21,7 +30,12 @@ import type {
   UpdateAssignmentRequest,
   UpdateBlockRequest,
   UpdateCourseRequest,
+  UpdateGroupRequest,
+  UpdateItemRequest,
   UpdateMaterialRequest,
+  UpsertEnrollmentRequest,
+  UpsertEnrollmentsByEmailRequest,
+  UpsertEnrollmentsByEmailResponse,
 } from '@/entities/course/types'
 import { ApiError, apiRequest } from '@/shared/api/http'
 
@@ -226,6 +240,135 @@ export const coursesApi = {
   publishAssignment(assignmentId: string) {
     return apiRequest<AssignmentResponse>(`/api/v1/assignments/${assignmentId}/publish`, {
       method: 'POST',
+    })
+  },
+
+  listAllSubmissions(assignmentId: string) {
+    return apiRequest<SubmissionResponse[]>(
+      `/api/v1/assignments/${assignmentId}/submissions`,
+    )
+  },
+
+  listAllCodeAttempts(assignmentId: string) {
+    return apiRequest<CodeAttemptResponse[]>(
+      `/api/v1/assignments/${assignmentId}/code-attempts`,
+    )
+  },
+
+  gradeSubmission(submissionId: string, payload: GradeSubmissionRequest) {
+    return apiRequest<SubmissionResponse>(`/api/v1/submissions/${submissionId}/grade`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    })
+  },
+
+  retryCodeAttempt(attemptId: string) {
+    return apiRequest<CodeAttemptResponse>(`/api/v1/code-attempts/${attemptId}/retry`, {
+      method: 'POST',
+    })
+  },
+
+  getGradebook(courseId: string) {
+    return apiRequest<CourseGradebookResponse>(
+      `/api/v1/courses/${courseId}/gradebook`,
+    )
+  },
+
+  getMyGradebook(courseId: string) {
+    return apiRequest<MyGradebookResponse>(
+      `/api/v1/courses/${courseId}/gradebook/me`,
+    )
+  },
+
+  getGradebookCsvUrl(courseId: string) {
+    return `/api/v1/courses/${courseId}/gradebook/csv`
+  },
+
+  listEnrollments(courseId: string) {
+    return apiRequest<EnrollmentResponse[]>(
+      `/api/v1/courses/${courseId}/enrollments`,
+    )
+  },
+
+  upsertEnrollment(courseId: string, payload: UpsertEnrollmentRequest) {
+    return apiRequest<void>(`/api/v1/courses/${courseId}/enrollments`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    })
+  },
+
+  deleteEnrollment(courseId: string, userId: string) {
+    return apiRequest<void>(`/api/v1/courses/${courseId}/enrollments/${userId}`, {
+      method: 'DELETE',
+    })
+  },
+
+  upsertEnrollmentsByEmail(courseId: string, payload: UpsertEnrollmentsByEmailRequest) {
+    return apiRequest<UpsertEnrollmentsByEmailResponse>(
+      `/api/v1/courses/${courseId}/enrollments/by-email`,
+      { method: 'POST', body: JSON.stringify(payload) },
+    )
+  },
+
+  deleteCourse(courseId: string) {
+    return apiRequest<void>(`/api/v1/courses/${courseId}`, { method: 'DELETE' })
+  },
+
+  listGroups(courseId: string) {
+    return apiRequest<GroupResponse[]>(`/api/v1/courses/${courseId}/groups`)
+  },
+
+  createGroup(courseId: string, payload: CreateGroupRequest) {
+    return apiRequest<GroupResponse>(`/api/v1/courses/${courseId}/groups`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    })
+  },
+
+  updateGroup(courseId: string, groupId: string, payload: UpdateGroupRequest) {
+    return apiRequest<GroupResponse>(`/api/v1/courses/${courseId}/groups/${groupId}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    })
+  },
+
+  deleteGroup(courseId: string, groupId: string) {
+    return apiRequest<void>(`/api/v1/courses/${courseId}/groups/${groupId}`, {
+      method: 'DELETE',
+    })
+  },
+
+  addGroupMember(courseId: string, groupId: string, payload: AddGroupMemberRequest) {
+    return apiRequest<GroupResponse>(
+      `/api/v1/courses/${courseId}/groups/${groupId}/members`,
+      { method: 'POST', body: JSON.stringify(payload) },
+    )
+  },
+
+  removeGroupMember(courseId: string, groupId: string, memberUserId: string) {
+    return apiRequest<GroupResponse>(
+      `/api/v1/courses/${courseId}/groups/${groupId}/members/${memberUserId}`,
+      { method: 'DELETE' },
+    )
+  },
+
+  createItem(courseId: string, payload: CreateItemRequest) {
+    return apiRequest<ItemResponse>(`/api/v1/courses/${courseId}/items`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    })
+  },
+
+  updateItem(courseId: string, itemId: string, payload: UpdateItemRequest) {
+    return apiRequest<ItemResponse>(`/api/v1/courses/${courseId}/items/${itemId}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    })
+  },
+
+  deleteItem(courseId: string, itemId: string) {
+    return apiRequest<void>(`/api/v1/courses/${courseId}/items/${itemId}`, {
+      method: 'DELETE',
     })
   },
 }

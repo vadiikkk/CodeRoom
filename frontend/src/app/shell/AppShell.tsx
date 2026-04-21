@@ -43,16 +43,31 @@ export function AppShell() {
               >
                 Курсы
               </NavLink>
+              {currentUser.role === 'TEACHER' ? (
+                <NavLink
+                  to="/app/admin"
+                  className={({ isActive }) =>
+                    isActive
+                      ? 'rounded-full bg-blue-500/15 px-3 py-2 text-blue-200'
+                      : 'rounded-full px-3 py-2 text-slate-300 transition hover:bg-slate-800/80 hover:text-white'
+                  }
+                >
+                  Администрирование
+                </NavLink>
+              ) : null}
             </nav>
           </div>
 
           <div className="flex items-center gap-4">
-            <div className="hidden text-right sm:block">
+            <Link
+              to="/app/profile"
+              className="hidden text-right transition hover:opacity-80 sm:block"
+            >
               <div className="text-sm font-medium text-white">{currentUser.email}</div>
               <div className="text-xs uppercase tracking-wide text-slate-400">
                 {currentUser.role}
               </div>
-            </div>
+            </Link>
             <Button
               variant="secondary"
               onClick={() => logoutMutation.mutate()}

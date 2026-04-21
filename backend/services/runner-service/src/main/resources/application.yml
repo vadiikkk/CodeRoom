@@ -30,4 +30,4 @@ coderoom:
     base-url: ${CODEROOM_CONTENT_BASE_URL:http://content-service:8080}
   runner:
     workspace-root: ${CODEROOM_RUNNER_WORKSPACE_ROOT:/tmp/coderoom-runs}
-    command-timeout-seconds: ${CODEROOM_RUNNER_TIMEOUT_SECONDS:180}
+    command-timeout-seconds: ${CODEROOM_RUNNER_TIMEOUT_SECONDS:600}

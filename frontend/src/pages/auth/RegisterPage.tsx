@@ -31,7 +31,7 @@ type RegisterFormValues = z.infer<typeof registerSchema>
 
 export function RegisterPage() {
   const navigate = useNavigate()
-  const { setAuthenticated, setBootstrapping } = useAuthStore()
+  const { setAuthenticated } = useAuthStore()
 
   const form = useForm<RegisterFormValues>({
     resolver: zodResolver(registerSchema),
@@ -50,9 +50,6 @@ export function RegisterPage() {
       })
       setStoredTokens(tokens)
       return authApi.me()
-    },
-    onMutate: () => {
-      setBootstrapping()
     },
     onSuccess: (user) => {
       setAuthenticated(user)

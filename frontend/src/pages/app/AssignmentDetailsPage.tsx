@@ -41,6 +41,7 @@ export function AssignmentDetailsPage() {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
   const [fileComment, setFileComment] = useState('')
   const [fileFormError, setFileFormError] = useState<string | null>(null)
+  const [downloadError, setDownloadError] = useState<string | null>(null)
 
   const assignmentQuery = useQuery({
     queryKey: ['assignment', assignmentId],
@@ -104,6 +105,7 @@ export function AssignmentDetailsPage() {
       const payload = await coursesApi.presignDownloadAttachment(attachmentId)
       await downloadPresignedFile(payload)
     },
+    onError: (error) => setDownloadError(getErrorMessage(error, 'Не удалось скачать файл')),
   })
 
   const submitTextMutation = useMutation({
@@ -173,6 +175,7 @@ export function AssignmentDetailsPage() {
       const payload = await coursesApi.getCodeAttemptLog(attemptId)
       await downloadPresignedFile(payload)
     },
+    onError: (error) => setDownloadError(getErrorMessage(error, 'Не удалось скачать лог')),
   })
 
   if (!courseId || !assignmentId) {
@@ -207,6 +210,30 @@ export function AssignmentDetailsPage() {
 
   return (
     <div className="space-y-8">
+      {downloadError ? (
+        <div className="flex items-start justify-between rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+          <span>{downloadError}</span>
+          <button
+            className="ml-4 shrink-0 text-rose-400 transition hover:text-rose-200"
+            onClick={() => setDownloadError(null)}
+          >
+            ✕
+          </button>
+        </div>
+      ) : null}
+
+      {mySubmissionQuery.isError ? (
+        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+          Не удалось загрузить текущую сдачу: {getErrorMessage(mySubmissionQuery.error)}
+        </div>
+      ) : null}
+
+      {myCodeAttemptsQuery.isError ? (
+        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+          Не удалось загрузить попытки: {getErrorMessage(myCodeAttemptsQuery.error)}
+        </div>
+      ) : null}
+
       <section className="rounded-3xl border border-slate-800 bg-slate-950/70 p-8">
         <Link className="text-sm text-blue-300 hover:text-blue-200" to={`/app/courses/${courseId}`}>
           ← Назад к курсу
@@ -230,6 +257,15 @@ export function AssignmentDetailsPage() {
           </span>
         </div>
       </section>
+
+      {!canSubmit ? (
+        <Link
+          to={`/app/courses/${courseId}/assignments/${assignmentId}/grading`}
+          className="inline-flex rounded-xl border border-blue-500/40 bg-blue-500/10 px-4 py-2.5 text-sm font-medium text-blue-100 transition hover:bg-blue-500/20"
+        >
+          Проверить сдачи студентов
+        </Link>
+      ) : null}
 
       <section className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
         <div className="space-y-6">
@@ -286,8 +322,7 @@ export function AssignmentDetailsPage() {
             <article className="rounded-3xl border border-slate-800 bg-slate-950/70 p-6">
               <h2 className="text-xl font-semibold text-white">Сдача задания</h2>
               <p className="mt-4 text-sm leading-6 text-slate-300">
-                Для вашей роли сейчас доступен просмотр описания, параметров и
-                приложенных материалов задания.
+                Сдача задания доступна только студентам.
               </p>
             </article>
           )}
@@ -564,20 +599,18 @@ function StudentSubmissionSection({
                 <InfoCard
                   label="Тесты"
                   value={
-                    attempt.testsTotal !== undefined
+                    attempt.testsTotal != null
                       ? `${attempt.testsPassed ?? 0}/${attempt.testsTotal}`
                       : 'Пока нет данных'
                   }
                 />
                 <InfoCard
                   label="Оценка"
-                  value={attempt.score !== undefined ? String(attempt.score) : 'Пока нет данных'}
+                  value={attempt.score != null ? String(attempt.score) : 'Пока нет данных'}
                 />
               </div>
 
-              {attempt.resultSummary ? (
-                <p className="mt-4 text-sm leading-6 text-slate-300">{attempt.resultSummary}</p>
-              ) : null}
+            
               {attempt.comment ? (
                 <p className="mt-3 text-sm leading-6 text-slate-300">{attempt.comment}</p>
               ) : null}
@@ -629,7 +662,7 @@ function SubmissionSummary({ submission }: { submission: SubmissionResponse }) {
         <InfoCard label="Обновлено" value={formatDateTime(submission.updatedAt)} />
         <InfoCard
           label="Оценка"
-          value={submission.score !== undefined ? String(submission.score) : 'Пока нет оценки'}
+          value={submission.score != null ? String(submission.score) : 'Пока нет оценки'}
         />
         <InfoCard
           label="Проверено"
@@ -697,8 +730,7 @@ function SubmissionAttachmentRow({ attachment }: { attachment: AttachmentRespons
 function LockedSubmissionNotice() {
   return (
     <div className="mt-6 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
-      Эта сдача уже проверена. Чтобы обновить работу, сначала потребуется
-      изменить статус на стороне преподавателя.
+      Эта работа уже проверена.
     </div>
   )
 }

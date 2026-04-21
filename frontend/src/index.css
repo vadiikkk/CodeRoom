@@ -46,3 +46,7 @@ select {
 #root {
   min-height: 100vh;
 }
+
+.date-time-picker-input::-webkit-calendar-picker-indicator {
+  display: none;
+}
