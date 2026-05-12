@@ -271,12 +271,13 @@ class RunnerService(
         xmlFiles.forEach { file ->
             runCatching {
                 val doc = factory.newDocumentBuilder().parse(file.toFile())
-                val root = doc.documentElement
-                val tests = root.getAttribute("tests").toIntOrNull()
-                val failures = root.getAttribute("failures").toIntOrNull() ?: 0
-                val errors = root.getAttribute("errors").toIntOrNull() ?: 0
-                val skipped = root.getAttribute("skipped").toIntOrNull() ?: 0
-                if (tests != null) {
+                val suites = doc.getElementsByTagName("testsuite")
+                for (i in 0 until suites.length) {
+                    val suite = suites.item(i) as? org.w3c.dom.Element ?: continue
+                    val tests = suite.getAttribute("tests").toIntOrNull() ?: continue
+                    val failures = suite.getAttribute("failures").toIntOrNull() ?: 0
+                    val errors = suite.getAttribute("errors").toIntOrNull() ?: 0
+                    val skipped = suite.getAttribute("skipped").toIntOrNull() ?: 0
                     total += tests
                     passed += (tests - failures - errors - skipped).coerceAtLeast(0)
                 }
